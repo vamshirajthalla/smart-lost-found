@@ -1,0 +1,197 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Campus Lost & Found Smart Box — DynamoDB table, ingest Lambda (fed by an
+  IoT Core topic rule), API Lambda + HTTP API for the dashboard, and an
+  S3 bucket for the static frontend.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: campus-lost-found
+  BoxTopicWildcard:
+    Type: String
+    Default: "lostfound/+/scan"
+    Description: IoT topic filter the ingest Lambda subscribes to.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 128
+
+Resources:
+  # ---------------- DynamoDB ----------------
+  ItemsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-items"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: itemId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: lastSeen
+          AttributeType: S
+      KeySchema:
+        - AttributeName: itemId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: lastSeen
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # ---------------- Ingest Lambda (IoT -> DynamoDB) ----------------
+  IngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-ingest"
+      CodeUri: ../lambda/
+      Handler: ingest_handler.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ItemsTable
+          IOT_DATA_ENDPOINT: !Sub
+            - "${Endpoint}"
+            - Endpoint: !GetAtt IotEndpointLookup.Endpoint
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ItemsTable
+        - Statement:
+            - Effect: Allow
+              Action: iot:Publish
+              Resource: !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/lostfound/*"
+
+  IngestFunctionIotPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref IngestFunction
+      Principal: iot.amazonaws.com
+      SourceArn: !GetAtt ScanTopicRule.Arn
+
+  ScanTopicRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Sub "${AWS::StackName}_scan_rule"
+      TopicRulePayload:
+        Sql: !Sub "SELECT *, topic(2) as boxId FROM '${BoxTopicWildcard}'"
+        AwsIotSqlVersion: "2016-03-23"
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt IngestFunction.Arn
+
+  # Custom resource just to fetch the account's IoT data endpoint at deploy
+  # time so it can be injected into the ingest Lambda's environment.
+  IotEndpointLookupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-iot-endpoint-lookup"
+      CodeUri: ./custom_resources/
+      Handler: iot_endpoint_lookup.handler
+      Timeout: 30
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: iot:DescribeEndpoint
+              Resource: "*"
+
+  IotEndpointLookup:
+    Type: Custom::IotEndpoint
+    Properties:
+      ServiceToken: !GetAtt IotEndpointLookupFunction.Arn
+
+  # ---------------- API Lambda + HTTP API (dashboard backend) ----------------
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-api"
+      CodeUri: ../lambda/
+      Handler: api_handler.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ItemsTable
+          STATUS_INDEX_NAME: StatusIndex
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ItemsTable
+      Events:
+        ListItems:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /items
+            Method: GET
+        GetItem:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /items/{itemId}
+            Method: GET
+        UpdateItem:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /items/{itemId}
+            Method: PUT
+        ClaimItem:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /items/{itemId}/claim
+            Method: POST
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: ["*"]
+        AllowMethods: ["GET", "PUT", "POST", "OPTIONS"]
+        AllowHeaders: ["Content-Type"]
+
+  # ---------------- Frontend hosting ----------------
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-frontend-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
+
+Outputs:
+  ApiUrl:
+    Description: Base URL for the dashboard REST API (paste into frontend/index.html CONFIG.apiBase)
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  FrontendUrl:
+    Description: S3 static website URL for the dashboard
+    Value: !GetAtt FrontendBucket.WebsiteURL
+  FrontendBucketName:
+    Description: Upload frontend/index.html here
+    Value: !Ref FrontendBucket
+  ItemsTableName:
+    Value: !Ref ItemsTable
+  IngestFunctionName:
+    Value: !Ref IngestFunction

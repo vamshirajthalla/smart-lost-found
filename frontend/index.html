@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Campus Lost &amp; Found — Smart Box</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #22333B;
+    --ink-soft: #45565f;
+    --paper: #EFE8D8;
+    --paper-raised: #F7F2E6;
+    --brass: #A9792C;
+    --stamp-red: #A63D2F;
+    --moss: #52734D;
+    --line: #C9BFA6;
+    --hole: #d8d0ba;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(34,51,59,0.05) 1px, transparent 0);
+    background-size: 18px 18px;
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  a { color: inherit; }
+
+  /* ---------- Masthead ---------- */
+  .masthead {
+    border-bottom: 3px solid var(--ink);
+    padding: 28px clamp(20px, 5vw, 64px) 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .masthead h1 {
+    font-family: 'Roboto Slab', serif;
+    font-weight: 700;
+    font-size: clamp(28px, 4vw, 40px);
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .masthead .sub {
+    font-size: 14px;
+    color: var(--ink-soft);
+    max-width: 46ch;
+  }
+
+  .stats {
+    display: flex;
+    gap: 28px;
+  }
+
+  .stat {
+    text-align: right;
+  }
+
+  .stat .num {
+    font-family: 'Roboto Slab', serif;
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1;
+    color: var(--brass);
+  }
+  .stat.claimed .num { color: var(--moss); }
+
+  .stat .label {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+
+  /* ---------- Control strip (card-catalog drawer) ---------- */
+  .drawer {
+    margin: 24px clamp(20px, 5vw, 64px) 8px;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 14px 18px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    box-shadow: 0 1px 0 rgba(34,51,59,0.06);
+  }
+
+  .drawer input[type="search"] {
+    flex: 1;
+    min-width: 180px;
+    border: none;
+    background: transparent;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .drawer input[type="search"]:focus { outline: none; border-bottom-color: var(--brass); }
+
+  .filters {
+    display: flex;
+    gap: 6px;
+  }
+
+  .filters button {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .filters button.active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper-raised);
+  }
+  .filters button:hover:not(.active) {
+    border-color: var(--brass);
+    color: var(--ink);
+  }
+
+  /* ---------- Ticket grid ---------- */
+  .grid {
+    margin: 22px clamp(20px, 5vw, 64px) 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 22px;
+  }
+
+  .ticket {
+    position: relative;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 18px 18px 16px;
+    overflow: hidden;
+  }
+
+  /* punched hole + perforation, evoking a physical claim ticket */
+  .ticket::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  .ticket .tag-id {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+    margin-bottom: 8px;
+  }
+
+  .ticket h3 {
+    font-family: 'Roboto Slab', serif;
+    font-size: 19px;
+    margin: 0 0 6px;
+    padding-right: 24px;
+    line-height: 1.25;
+  }
+
+  .ticket p.desc {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    margin: 0 0 14px;
+    min-height: 18px;
+  }
+
+  .ticket .meta {
+    font-size: 12px;
+    color: var(--ink-soft);
+    border-top: 1px dashed var(--line);
+    padding-top: 10px;
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .stamp {
+    font-family: 'Roboto Slab', serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 3px;
+    border: 1.5px solid currentColor;
+    transform: rotate(-2deg);
+  }
+  .stamp.in { color: var(--stamp-red); }
+  .stamp.out { color: var(--moss); }
+
+  .ticket .actions {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 3px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper-raised);
+    cursor: pointer;
+    flex: 1;
+  }
+  .btn.secondary {
+    background: transparent;
+    color: var(--ink);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .empty, .loading {
+    margin: 60px clamp(20px, 5vw, 64px);
+    text-align: center;
+    color: var(--ink-soft);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+  }
+
+  .banner {
+    margin: 0 clamp(20px, 5vw, 64px);
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: #f4e6cf;
+    border: 1px solid var(--brass);
+    border-radius: 3px;
+    font-size: 12.5px;
+    color: #6b4d15;
+    display: none;
+  }
+  .banner.show { display: block; }
+
+  dialog {
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+    max-width: 380px;
+    width: 90%;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  }
+  dialog::backdrop { background: rgba(34,51,59,0.35); }
+  .dialog-inner { padding: 22px; }
+  .dialog-inner h4 { font-family: 'Roboto Slab', serif; margin: 0 0 14px; }
+  .dialog-inner label {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin: 12px 0 4px;
+  }
+  .dialog-inner input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+  }
+  .dialog-actions {
+    margin-top: 18px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+</style>
+</head>
+<body>
+
+  <header class="masthead">
+    <div>
+      <h1>Campus Lost &amp; Found</h1>
+      <div class="sub">Live status from the smart drop box — every item is tagged, scanned, and tracked automatically.</div>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <div class="num" id="statIn">–</div>
+        <div class="label">currently in box</div>
+      </div>
+      <div class="stat claimed">
+        <div class="num" id="statOut">–</div>
+        <div class="label">claimed / checked out</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner" id="offlineBanner">Showing sample data — the dashboard couldn't reach the API, so live results aren't loading yet.</div>
+
+  <div class="drawer">
+    <input type="search" id="searchInput" placeholder="Search by item, description, or tag ID…" />
+    <div class="filters">
+      <button class="active" data-filter="ALL">All</button>
+      <button data-filter="CHECKED_IN">In box</button>
+      <button data-filter="CHECKED_OUT">Claimed</button>
+    </div>
+  </div>
+
+  <div id="content">
+    <div class="loading">Loading items…</div>
+  </div>
+
+  <dialog id="claimDialog">
+    <div class="dialog-inner">
+      <h4>Mark as claimed</h4>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0;">This records that staff released this item to its owner.</p>
+      <label for="ownerInput">Owner contact (optional)</label>
+      <input type="text" id="ownerInput" placeholder="email or phone" />
+      <div class="dialog-actions">
+        <button class="btn secondary" id="cancelClaim" type="button">Cancel</button>
+        <button class="btn" id="confirmClaim" type="button">Confirm claim</button>
+      </div>
+    </div>
+  </dialog>
+
+<script>
+  // ---- Configuration ----
+  // Paste the ApiUrl output from the CloudFormation/SAM deploy here, e.g.
+  // "https://abc123.execute-api.us-east-1.amazonaws.com"
+  const CONFIG = {
+    apiBase: "" // <-- fill this in after deploy
+  };
+
+  const MOCK_ITEMS = [
+    { itemId: "04A3B2C1", itemName: "Blue Hydro Flask", description: "Dented cap, campus gym sticker", status: "CHECKED_IN", lastSeen: "2026-09-10T08:15:00Z" },
+    { itemId: "19FF00AB", itemName: "TI-84 Calculator", description: "Name 'R. Nunez' on back in marker", status: "CHECKED_IN", lastSeen: "2026-09-09T17:40:00Z" },
+    { itemId: "7C221190", itemName: "Black Umbrella", description: "", status: "CHECKED_IN", lastSeen: "2026-09-09T09:05:00Z" },
+    { itemId: "B1004DDE", itemName: "AirPods Case", description: "White, small scratch on lid", status: "CHECKED_OUT", lastSeen: "2026-09-08T14:22:00Z" },
+    { itemId: "E2FA3301", itemName: "Unidentified item", description: "", status: "CHECKED_IN", lastSeen: "2026-09-10T11:02:00Z" },
+    { itemId: "5590CADE", itemName: "Library Book — Org Chem", description: "Due date slip inside", status: "CHECKED_OUT", lastSeen: "2026-09-07T10:00:00Z" },
+  ];
+
+  let allItems = [];
+  let activeFilter = "ALL";
+  let searchTerm = "";
+  let pendingClaimId = null;
+
+  const contentEl = document.getElementById("content");
+  const offlineBanner = document.getElementById("offlineBanner");
+
+  function escapeHtml(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  function timeAgo(iso) {
+    const then = new Date(iso).getTime();
+    const diffMin = Math.round((Date.now() - then) / 60000);
+    if (diffMin < 1) return "just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    return `${Math.round(diffHr / 24)}d ago`;
+  }
+
+  async function fetchItems() {
+    if (!CONFIG.apiBase) {
+      offlineBanner.classList.add("show");
+      return MOCK_ITEMS;
+    }
+    try {
+      const res = await fetch(`${CONFIG.apiBase}/items`);
+      if (!res.ok) throw new Error("bad response");
+      const data = await res.json();
+      offlineBanner.classList.remove("show");
+      return data.items || [];
+    } catch (e) {
+      offlineBanner.classList.add("show");
+      return MOCK_ITEMS;
+    }
+  }
+
+  async function claimItem(itemId, ownerContact) {
+    if (!CONFIG.apiBase) {
+      // demo mode: just update locally
+      const item = allItems.find(i => i.itemId === itemId);
+      if (item) item.status = "CHECKED_OUT";
+      render();
+      return;
+    }
+    await fetch(`${CONFIG.apiBase}/items/${itemId}/claim`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ownerContact }),
+    });
+    await load();
+  }
+
+  function updateStats(items) {
+    document.getElementById("statIn").textContent = items.filter(i => i.status === "CHECKED_IN").length;
+    document.getElementById("statOut").textContent = items.filter(i => i.status === "CHECKED_OUT").length;
+  }
+
+  function render() {
+    let items = allItems;
+    if (activeFilter !== "ALL") {
+      items = items.filter(i => i.status === activeFilter);
+    }
+    if (searchTerm) {
+      const t = searchTerm.toLowerCase();
+      items = items.filter(i =>
+        (i.itemName || "").toLowerCase().includes(t) ||
+        (i.description || "").toLowerCase().includes(t) ||
+        (i.itemId || "").toLowerCase().includes(t)
+      );
+    }
+
+    updateStats(allItems);
+
+    if (items.length === 0) {
+      contentEl.innerHTML = `<div class="empty">No items match — try a different search or filter.</div>`;
+      return;
+    }
+
+    contentEl.innerHTML = `<div class="grid">${items.map(renderTicket).join("")}</div>`;
+
+    contentEl.querySelectorAll("[data-claim]").forEach(btn => {
+      btn.addEventListener("click", () => openClaimDialog(btn.getAttribute("data-claim")));
+    });
+  }
+
+  function renderTicket(item) {
+    const isIn = item.status === "CHECKED_IN";
+    return `
+      <div class="ticket">
+        <div class="tag-id">TAG ${escapeHtml(item.itemId)}</div>
+        <h3>${escapeHtml(item.itemName || "Unidentified item")}</h3>
+        <p class="desc">${escapeHtml(item.description || "No description on file.")}</p>
+        <div class="meta">
+          <span>${timeAgo(item.lastSeen)}</span>
+          <span class="stamp ${isIn ? "in" : "out"}">${isIn ? "In box" : "Claimed"}</span>
+        </div>
+        ${isIn ? `<div class="actions"><button class="btn" data-claim="${escapeHtml(item.itemId)}">Mark claimed</button></div>` : ""}
+      </div>
+    `;
+  }
+
+  function openClaimDialog(itemId) {
+    pendingClaimId = itemId;
+    document.getElementById("ownerInput").value = "";
+    document.getElementById("claimDialog").showModal();
+  }
+
+  document.getElementById("cancelClaim").addEventListener("click", () => {
+    document.getElementById("claimDialog").close();
+  });
+
+  document.getElementById("confirmClaim").addEventListener("click", async () => {
+    const owner = document.getElementById("ownerInput").value.trim();
+    document.getElementById("claimDialog").close();
+    if (pendingClaimId) await claimItem(pendingClaimId, owner);
+    pendingClaimId = null;
+  });
+
+  document.getElementById("searchInput").addEventListener("input", (e) => {
+    searchTerm = e.target.value;
+    render();
+  });
+
+  document.querySelectorAll(".filters button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filters button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeFilter = btn.getAttribute("data-filter");
+      render();
+    });
+  });
+
+  async function load() {
+    allItems = await fetchItems();
+    render();
+  }
+
+  load();
+  // Poll for updates so the board reflects new scans without a manual refresh.
+  setInterval(load, 15000);
+</script>
+</body>
+</html>

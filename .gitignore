@@ -1,0 +1,14 @@
+# Secrets - never commit
+firmware/secrets.h
+infrastructure/certs/
+*.pem
+*.key
+.env
+
+# Build / local
+.aws-sam/
+samconfig.toml
+__pycache__/
+*.pyc
+*.zip
+.DS_Store
